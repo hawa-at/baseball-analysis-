@@ -10,16 +10,15 @@ library(shinydashboard)
 library(ggrepel)
 
 
-
-teams_df <- readRDS("../data/team_stats.rds")
-team_results_df <- readRDS("../data/team_results.rds")
-hitting_df <- readRDS("../data/hitting_stats.rds")
-pitching_df <- readRDS("../data/pitching_stats.rds")
-fielding_df <- readRDS("../data/fielding_stats.rds")
-p_hit_df <- readRDS("../data/bref_daily_batter.rds")
-p_pitch_df <- readRDS("../data/bref_daily_pitcher.rds")
-team_standings_df <- readRDS("../data/MLB_Team_Standings.rds")
-division_standings_df <- readRDS("../data/MLB_Division_Standings.rds")
+teams_df <- readRDS("/Users/hawatoumbou/Documents/GitHub/baseball-analysis-/data/team_stats.rds")
+team_results_df <- readRDS("/Users/hawatoumbou/Documents/GitHub/baseball-analysis-/data/team_results.rds")
+hitting_df <- readRDS("/Users/hawatoumbou/Documents/GitHub/baseball-analysis-/data/hitting_stats.rds")
+pitching_df <- readRDS("/Users/hawatoumbou/Documents/GitHub/baseball-analysis-/data/pitching_stats.rds")
+fielding_df <- readRDS("/Users/hawatoumbou/Documents/GitHub/baseball-analysis-/data/fielding_stats.rds")
+p_hit_df <- readRDS("/Users/hawatoumbou/Documents/GitHub/baseball-analysis-/data/bref_daily_batter.rds")
+p_pitch_df <- readRDS("/Users/hawatoumbou/Documents/GitHub/baseball-analysis-/data/bref_daily_pitcher.rds")
+team_standings_df <- readRDS("/Users/hawatoumbou/Documents/GitHub/baseball-analysis-/data/MLB_Team_Standings.rds")
+division_standings_df <- readRDS("/Users/hawatoumbou/Documents/GitHub/baseball-analysis-/data/MLB_Division_Standings.rds")
 
 
 
@@ -89,9 +88,9 @@ format_datatable <- function(data) {
 }
 
 all_stats <- bind_rows(
-  pitching_stats %>% mutate(source = "Pitching"),
-  fielding_stats %>% mutate(source = "Fielding"),
-  hitting_stats %>% mutate(source = "Hitting")
+  pitching_df %>% mutate(source = "Pitching"),
+  fielding_df %>% mutate(source = "Fielding"),
+  hitting_df %>% mutate(source = "Hitting")
 )
 
 
