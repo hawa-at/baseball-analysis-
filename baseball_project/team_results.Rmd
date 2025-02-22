@@ -1,0 +1,89 @@
+---
+title: "team_clean_data"
+output: html_document
+date: "2024-12-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(baseballr)
+library(dplyr)
+library(purrr)
+library(tibble)
+library(tidyverse)
+library(shiny)
+```
+
+
+```{r}
+
+teams <- c("NYM", "ATL", "BOS", "BAL", "CHC", "CIN", "COL", "CLE", "DET", "HOU", "LAD", "MIA", "MIL", "MIN", "NYY", "OAK", "PHI", "PIT", "SDP", "SEA", "SFG", "STL", "TBR", "TEX", "TOR", "WSN", "CHW", "LAA", "LAD", "ARI" )
+
+team_results <- list()
+for (team in teams) {
+  for (year in 2019:2024) {
+    result <- try(bref_team_results(team, year), silent = TRUE)
+    if (inherits(result, "try-error")) {
+    } else {
+      team_results[[paste0(team, "_", year)]] <- result
+    }
+  }
+}
+
+team_results<- team_results %>%
+  enframe(name = "source", value = "data") %>%
+  filter(map_lgl(data, ~ !is.null(.x))) %>%
+  unnest(data) %>%
+  mutate(
+    year = as.numeric(sub(".*_(\\d{4})$", "\\1", source)),
+    team = sub("^(.*)_\\d{4}$", "\\1", source)
+  ) %>%
+  separate(Record, into = c("wins", "losses"), sep = "-", convert = TRUE) %>%
+  group_by(team, year) %>%
+  filter(Gm == max(Gm)) %>% # 
+  summarise(
+    total_wins = wins,
+    losses = losses,
+    .groups = "drop"
+  )
+
+
+team_name_lookup <- c(
+  NYM = "New York Mets", ATL = "Atlanta Braves", BOS = "Boston Red Sox", 
+  BAL = "Baltimore Orioles", CHC = "Chicago Cubs", CIN = "Cincinnati Reds", 
+  COL = "Colorado Rockies", CLE = "Cleveland Guardians", DET = "Detroit Tigers", 
+  HOU = "Houston Astros", LAD = "Los Angeles Dodgers", MIA = "Miami Marlins", 
+  MIL = "Milwaukee Brewers", MIN = "Minnesota Twins", NYY = "New York Yankees", 
+  OAK = "Oakland Athletics", PHI = "Philadelphia Phillies", PIT = "Pittsburgh Pirates", 
+  SDP = "San Diego Padres", SEA = "Seattle Mariners", SFG = "San Francisco Giants", 
+  STL = "St. Louis Cardinals", TBR = "Tampa Bay Rays", TEX = "Texas Rangers", 
+  TOR = "Toronto Blue Jays", WSN = "Washington Nationals", CHW = "Chicago White Sox", 
+  LAA = "Los Angeles Angels", ARI = "Arizona Diamondbacks"
+)
+division_lookup <- tibble(
+  team = c("NYM", "ATL", "BOS", "BAL", "CHC", "CIN", "COL", "CLE", "DET", 
+           "HOU", "LAD", "MIA", "MIL", "MIN", "NYY", "OAK", "PHI", "PIT", 
+           "SDP", "SEA", "SFG", "STL", "TBR", "TEX", "TOR", "WSN", "CHW", 
+           "LAA", "ARI"),
+  division_name = c(
+    "NL East", "NL East", "AL East", "AL East", "NL Central", "NL Central", 
+    "NL West", "AL Central", "AL Central", "AL West", "NL West", "NL East", 
+    "NL Central", "AL Central", "AL East", "AL West", "NL East", "NL Central", 
+    "NL West", "AL West", "NL West", "NL Central", "AL East", "AL West", 
+    "AL East", "NL East", "AL Central", "AL West", "NL West"
+  )
+)
+
+
+team_results <- team_results %>%
+  mutate(team_name = team_name_lookup[team])
+
+
+team_results <- team_results %>%
+  left_join(division_lookup, by = "team")
+
+
+saveRDS(team_results, file = "team_results.rds")
+```
+
+

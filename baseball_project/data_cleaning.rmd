@@ -1,0 +1,296 @@
+```{r}
+#install.packages("shinyjs")
+library(shinydashboard)
+library(shiny)
+library(shinyjs)
+library(tidyverse)
+library(ggplot2)
+library(DT)
+library(DBI)
+library(shiny)
+library(baseballr)
+library(dplyr)
+```
+
+
+```{r}
+
+# Function to fetch all data for a given year with detailed error handling
+fetch_year_data <- function(year) {
+  cat("Fetching data for year:", year, "\n")
+  
+  # Fetch teams data with error handling
+  teams_data <- tryCatch({
+    mlb_teams() |>
+      mutate(year = year)
+  }, error = function(e) {
+    cat(sprintf("Error fetching teams data: %s\n", e$message))
+    return(data.frame())
+  })
+  
+  # Helper function to safely fetch and process stats with detailed error logging
+  fetch_stats <- function(stat_group) {
+    tryCatch({
+      cat(sprintf("Attempting to fetch %s stats for year %d...\n", stat_group, year))
+      
+      # Print the arguments being used
+      cat(sprintf("Parameters: season=%d, stat_type=season, stat_group=%s\n", 
+                  year, stat_group))
+      
+      result <- try(mlb_teams_stats(stat_type = 'season', stat_group = as.character(stat_group),
+                                    season = as.numeric(year)))
+        
+      
+      if (is.null(result) || nrow(result) == 0) {
+        cat(sprintf("Warning: No data returned for %s stats in %d\n", stat_group, year))
+        return(data.frame())
+      }
+      
+      return(result |> mutate(year = year))
+      
+    }, error = function(e) {
+      cat(sprintf("Error fetching %s stats for year %d: %s\n", 
+                  stat_group, year, e$message))
+      
+      # Try to print more information about the error
+      cat("Error details:\n")
+      print(e)
+      
+      return(data.frame())
+    })
+  }
+  
+  # Fetch stats with delay between calls to avoid rate limiting
+  cat("\nFetching hitting stats...\n")
+  hitting_stats <- fetch_stats("hitting")
+  Sys.sleep(2)  # Add delay between calls
+  
+  cat("\nFetching pitching stats...\n")
+  pitching_stats <- fetch_stats("pitching")
+  Sys.sleep(2)  # Add delay between calls
+  
+  cat("\nFetching fielding stats...\n")
+  fielding_stats <- fetch_stats("fielding")
+  
+  # Check if we got any data
+  cat("\nData fetch summary:\n")
+  # cat("Teams data rows:", nrow(teams_data), "\n")
+  cat("Hitting stats rows:", nrow(hitting_stats), "\n")
+  cat("Pitching stats rows:", nrow(pitching_stats), "\n")
+  cat("Fielding stats rows:", nrow(fielding_stats), "\n")
+  
+  # Return as list
+  list(
+    teams = teams_data,
+    hitting = hitting_stats,
+    pitching = pitching_stats,
+    fielding = fielding_stats
+  )
+}
+
+```
+
+```{r}
+
+
+test_fetch <- fetch_year_data(2023)
+
+```
+```{r}
+
+# Function to save or update consolidated data
+save_consolidated_data <- function(years_to_fetch) {
+  # File paths
+  #teams_file <- "../data-raw/teams_data.rds"
+  hitting_file <- "../data-raw/hitting_stats.rds"
+  pitching_file <- "../data-raw/pitching_stats.rds"
+  fielding_file <- "../data-raw/fielding_stats.rds"
+  
+  # Load existing data if it exists
+  #existing_teams <- if (file.exists(teams_file)) readRDS(teams_file) else NULL
+  existing_hitting <- if (file.exists(hitting_file)) readRDS(hitting_file) else NULL
+  existing_pitching <- if (file.exists(pitching_file)) readRDS(pitching_file) else NULL
+  existing_fielding <- if (file.exists(fielding_file)) readRDS(fielding_file) else NULL
+  
+  # Fetch new data for all specified years
+  new_data <- map(years_to_fetch, fetch_year_data)
+  
+  # Combine data from all years
+  # combined_teams <- bind_rows(
+  #   existing_teams,
+  #   map_dfr(new_data, "teams")
+  # ) |> distinct()  # Remove any duplicates
+  
+  combined_hitting <- bind_rows(
+    existing_hitting,
+    map_dfr(new_data, "hitting")
+  ) |> distinct()
+  
+  combined_pitching <- bind_rows(
+    existing_pitching,
+    map_dfr(new_data, "pitching")
+  ) |> distinct()
+  
+  combined_fielding <- bind_rows(
+    existing_fielding,
+    map_dfr(new_data, "fielding")
+  ) |> distinct()
+  
+  # Save consolidated files
+  # saveRDS(combined_teams, teams_file)
+  saveRDS(combined_hitting, hitting_file)
+  saveRDS(combined_pitching, pitching_file)
+  saveRDS(combined_fielding, fielding_file)
+  
+  # Print summary
+  cat("\nData consolidation complete!\n")
+  # cat("Teams data:", nrow(combined_teams), "rows\n")
+  cat("Hitting stats:", nrow(combined_hitting), "rows\n")
+  cat("Pitching stats:", nrow(combined_pitching), "rows\n")
+  cat("Fielding stats:", nrow(combined_fielding), "rows\n")
+}
+
+```
+
+
+
+```{r}
+
+# Helper function to load and process team stats
+#not sure if we should ever use this function
+process_fielding_stats <- function(year, stat_group) {
+  # Load the relevant data files
+  fielding_df <- readRDS("../data/fielding_data.rds") |> filter(year == !!year)
+  
+  stats_file <- paste0("../data/", stat_group, "_stats.rds")
+  stats_data <- readRDS(stats_file) |> filter(year == !!year)
+  
+  # Process and combine the data
+  if (nrow(stats_data) == 0) return(NULL)
+  
+  stats_data |>
+    left_join(teams_data, by = c("team_id", "year")) |>
+    select(team_name, everything(), -team_id) |>
+    arrange(team_name)
+}
+
+
+
+
+```
+
+
+```{r}
+years_to_fetch <- 1973:2023
+save_consolidated_data(years_to_fetch)
+
+```
+```{r}
+hitting_df <- readRDS("../data-raw/hitting_stats.rds")
+#teams_df <- readRDS("../data-raw/teams_data.rds")
+fielding_df <- readRDS("../data-raw/fielding_stats.rds")
+pitching_df <- readRDS("../data-raw/pitching_stats.rds")
+```
+
+```{r}
+glimpse(hitting_df)
+glimpse(teams_df)
+glimpse(fielding_df)
+glimpse(pitching_df)
+
+```
+```{r}
+unique(teams_df$sport_name)
+nrow(teams_df)
+teams_df |> filter(sport_name == "Major League Baseball") -> mlb_team_df
+
+
+#mlb_team_df needs to just be a data table at the bottom where you can look up stats about the teams
+mlb_team_df |> select(-c(all_star_status, link, season, file_code, short_name, franchise_name, club_name, active, venue_link, league_id, league_link, division_link, sport_link, spring_league_link, spring_venue_link)) -> team_facts_df
+
+
+
+pitching_df |> select(c(year, team_id, win_percentage, rank, games_played, games_started, games_finished, wins, losses)) -> win_stats_df
+
+glimpse(mlb_team_df)
+
+```
+#one table of team facts 
+
+# one visualization for team hitting, one for team pitching, one for team fielding, sidebar to filter page by team and by year, option to select metrics for visualization for each
+
+#one visualization with team performance based on selected metrics, bar graph by team for single numerical variables, line, copy the other metrics from other project for categorical variable visualization, combine hitting and pitching stats, 
+
+similar visualization for hitting stats
+
+
+simliar visualization for pitching_stats
+
+
+```{r}
+#remove non MLB teams from dataset
+glimpse(hitting_df)
+glimpse(pitching_df)
+glimpse(fielding_df)
+
+pitching_df |> select(-c(team_link, splits_tied_with_offset, splits_tied_with_limit, type_display_name, season)) -> pitching_df
+hitting_df |> select(-c(team_link, splits_tied_with_offset, splits_tied_with_limit, type_display_name, season)) -> hitting_df
+fielding_df |> select(-c(team_link, splits_tied_with_offset, splits_tied_with_limit, type_display_name, season)) -> fielding_df
+
+mlb_team_df
+pitching_df |> filter(team_id %in% mlb_team_df$team_id)  |> select(-c(team_link, splits_tied_with_offset, splits_tied_with_limit))-> pitching_df
+# hitting_df |> filter(team_id %in% mlb_team_df$team_id) |> select(-c(team_link, splits_tied_with_limit, splits_tied_with_offset)) -> hitting_df
+# 
+# fielding_df |> filter(team_id %in% mlb_team_df$team_id) |> select(-c(team_link, splits_tied_with_limit, splits_tied_with_offset)) -> fielding_df
+```
+
+```{r}
+mlb_team_df |> select(-c(all_star_status, link, season, parent_org_id, venue_id, venue_link, league_id, league_name, league_link, division_id, division_link, sport_id, sport_link, sport_name, spring_league_id, spring_league_link, spring_league_abbreviation, spring_venue_id, spring_venue_link, team_id, team_code, file_code)) -> mlb_team_df
+
+mlb_team_df |> select(-c(parent_org_name, team_code, file_code)) -> mlb_team_df
+mlb_team_df |> select(-c(active)) -> mlb_team_df
+glimpse(mlb_team_df)
+```
+
+```{r}
+#save files as RDS to data instead of data_raw
+saveRDS(mlb_team_df, "../data/team_stats.rds")
+saveRDS(pitching_df, "../data/pitching_stats.rds")
+saveRDS(hitting_df, "../data/hitting_stats.rds")
+saveRDS(fielding_df, "../data/fielding_stats.rds")
+
+
+
+```
+
+```{r}
+str(mlb_team_df)
+```
+```{r}
+hitting_df <- readRDS("../data/hitting_stats.rds")
+
+mlb_team_df <- readRDS("../data/team_stats.rds")
+pitching_df <- readRDS("../data/pitching_stats.rds")
+fielding_df <- readRDS("../data/fielding_stats.rds")
+```
+```{r}
+hitting_df
+
+pitching_df
+
+fielding_df
+mlb_team_df
+unique(hitting_df$team_id)
+unique(pitching_df$team_name)
+unique(fielding_df$team_name)
+
+
+sort(unique(pitching_df$team_id))
+
+mlb_team_codes <- unique(mlb_team_df$team_id)
+pitching_df |> filter(team_id %in% mlb_team_codes)
+
+
+pitching_df |> filter(team_id %in% mlb_team_df$team_id)
+```
+

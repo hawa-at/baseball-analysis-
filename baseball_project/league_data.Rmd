@@ -1,0 +1,70 @@
+---
+title: "standings_on_date"
+output: html_document
+date: "2024-12-11"
+---
+
+```{r}
+library(Lahman)
+library(dplyr)
+library(purrr)
+library(tibble)
+library(tidyverse)
+```
+
+```{r}
+team_standings <- Teams %>%
+  filter(yearID >= 2015 & yearID <= 2024) %>%
+  select(yearID, teamID, lgID, G, W, L, R, RA, DivWin, WCWin, LgWin, WSWin, attendance, divID)
+```
+
+```{r}
+#winning percentage and run differential
+team_standings_df <- team_standings %>%
+  mutate(WinPct = W / G, RunDiff = R - RA)
+
+```
+
+```{r}
+division_mapping <- tibble(
+  lgID = c("AL", "AL", "AL", "NL", "NL", "NL"),
+  divID = c("E", "C", "W", "E", "C", "W"),
+  Division = c("AL East", "AL Central", "AL West", "NL East", "NL Central", "NL West")
+)
+```
+
+
+```{r}
+division_standings_df <- team_standings_df %>%
+  group_by(yearID, lgID, divID) %>%
+  summarize(
+    TotalGames = sum(G),
+    TotalWins = sum(W),
+    TotalLosses = sum(L),
+    AvgWinPct = mean(WinPct, na.rm = TRUE)
+  )
+
+```
+
+```{r}
+team_standings_df <- team_standings_df %>%
+  filter(lgID %in% c("AL", "NL"))
+
+division_standings_df <- division_standings_df %>%
+  filter(lgID %in% c("AL", "NL"))
+
+
+team_standings_df <- team_standings_df %>%
+  left_join(division_mapping, by = c("lgID", "divID"))
+
+division_standings_df <- division_standings_df %>%
+  left_join(division_mapping, by = c("lgID", "divID"))
+```
+
+```{r}
+saveRDS(team_standings_df, file = "MLB_Team_Standings.rds")
+saveRDS(division_standings_df, file = "MLB_Division_Standings.rds")
+```
+
+
+
